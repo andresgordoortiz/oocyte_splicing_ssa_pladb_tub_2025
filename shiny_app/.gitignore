@@ -1,0 +1,53 @@
+# .gitignore for Shiny application
+
+# R files
+.Rhistory
+.RData
+.Rproj.user
+.Rapp.history
+
+# Session Data
+.RDataTmp
+*.Rproj
+
+# Temporary files
+*.tmp
+*.log
+*.cache
+*~
+
+# Package development
+*.tar.gz
+*.zip
+.Rbuildignore
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# rsconnect deployment
+rsconnect/
+
+# Data files (if you don't want to commit large data)
+# Uncomment if data should not be in version control
+# *.csv
+# *.tab
+# *.xlsx
+
+# Output files
+*.pdf
+*.png
+downloads/
+
+# IDE specific
+.vscode/
+.idea/
+
+# Shiny specific
+shiny_bookmarks/

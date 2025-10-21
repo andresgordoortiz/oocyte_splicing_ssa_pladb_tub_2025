@@ -1,179 +1,318 @@
 library(readxl)
 library(tidyverse)
 library(ggrepel)
+library(biomaRt)
+library(dplyr)
+library(stringr)
+library(org.Mm.eg.db)
+library(betAS)
+
+# ============================================================================
+# DATA LOADING (Keep your original code)
+# ============================================================================
 
 katarina_protein_stable_oocyte <- read_excel("41556_2024_1442_MOESM4_ESM.xlsx", 
-                                             sheet = "TableS1", col_types = c("text", 
-                                                                              "text", "text", "text", "text", "text", 
-                                                                              "text", "numeric", "text", "text", 
-                                                                              "text", "numeric", "numeric", "numeric", 
-                                                                              "numeric", "numeric", "numeric", 
-                                                                              "numeric", "numeric", "numeric", 
-                                                                              "numeric", "numeric", "numeric", 
-                                                                              "numeric", "numeric", "numeric", 
-                                                                              "numeric", "numeric", "numeric", 
-                                                                              "numeric", "numeric")) %>%
-  rename("GENE"="gene_name", "stability"="mean percent H") 
-  katarina_protein_stable_oocyte<-filter(katarina_protein_stable_oocyte, 
-                                         !is.na(katarina_protein_stable_oocyte$stability))
+                                             sheet = "TableS1")
+
+names(katarina_protein_stable_oocyte)[names(katarina_protein_stable_oocyte) == "gene_name"] <- "GENE"
+names(katarina_protein_stable_oocyte)[names(katarina_protein_stable_oocyte) == "mean percent H"] <- "stability"
+
+katarina_protein_stable_oocyte <- katarina_protein_stable_oocyte %>%
+  mutate(stability = as.numeric(stability)) %>%
+  filter(!is.na(stability))
+
+translated_genes <- read_excel("translated_genes.xlsx")
+
+# Gene symbol mapping
+genes_original <- translated_genes$Gene
+genes_clean <- str_split(genes_original, " /// ") %>% sapply("[", 1)
+is_probe <- str_detect(genes_clean, "^Mm\\.")
+genes_to_map <- genes_clean[!is_probe]
+
+ensembl <- useMart("ensembl", dataset="mmusculus_gene_ensembl")
+
+res_symbol <- getBM(attributes=c("external_gene_name","mgi_symbol"),
+                    filters="external_gene_name",
+                    values=genes_to_map,
+                    mart=ensembl) %>%
+  mutate(input=as.character(external_gene_name))
+
+res_ensembl <- getBM(attributes=c("ensembl_gene_id","mgi_symbol"),
+                     filters="ensembl_gene_id",
+                     values=genes_to_map,
+                     mart=ensembl) %>%
+  mutate(input=as.character(ensembl_gene_id))
+
+res_entrez <- getBM(attributes=c("entrezgene_id","mgi_symbol"),
+                    filters="entrezgene_id",
+                    values=genes_to_map,
+                    mart=ensembl) %>%
+  mutate(input=as.character(entrezgene_id))
+
+gene_map <- bind_rows(
+  res_symbol %>% dplyr::select(input, mgi_symbol),
+  res_ensembl %>% dplyr::select(input, mgi_symbol),
+  res_entrez %>% dplyr::select(input, mgi_symbol)
+) %>% distinct(input, .keep_all = TRUE)
+
+official_symbols_mapped <- sapply(genes_to_map, function(g) {
+  res <- gene_map$mgi_symbol[gene_map$input == g]
+  if(length(res) > 0) res[1] else NA_character_
+})
+
+official_symbols_full <- rep(NA_character_, length(genes_clean))
+official_symbols_full[!is_probe] <- official_symbols_mapped
+
+official_symbols_full <- sapply(seq_along(official_symbols_full), function(i) {
+  if(!is.na(official_symbols_full[i])) return(official_symbols_full[i])
+  match <- str_extract(genes_clean[i], "\\b[A-Z][a-z0-9]+\\b")
+  if(!is.na(match)) return(match)
+  return(genes_clean[i])
+})
+
+translated_genes <- translated_genes %>%
+  mutate(symbol = official_symbols_full)
+
+# Clean duplicates
+katarina_clean <- katarina_protein_stable_oocyte %>%
+  filter(!is.na(GENE)) %>%
+  distinct(GENE, .keep_all = TRUE)
+
+translated_clean <- translated_genes %>%
+  filter(!is.na(symbol)) %>%
+  distinct(symbol, .keep_all = TRUE)
 
 # Import betAS output tables
-tub_fdr_df<-read_csv("tub_fdr.csv")[,-1]
-pladb_fdr_df<-read_csv("pladb_fdr.csv")[,-1]
-ssa_fdr_df<-read_csv("ssa_fdr.csv")[,-1]
+tub_fdr_df <- read_csv("tub_fdr.csv")[,-1]
+pladb_fdr_df <- read_csv("pladb_fdr.csv")[,-1]
+ssa_fdr_df <- read_csv("ssa_fdr.csv")[,-1]
 
+differential_tub <- na.omit(tub_fdr_df[tub_fdr_df$FDR <= 0.05 & abs(tub_fdr_df$deltapsi) >= 0.1,])
+differential_pladb <- na.omit(pladb_fdr_df[pladb_fdr_df$FDR <= 0.05 & abs(pladb_fdr_df$deltapsi) >= 0.1,])
+differential_ssa <- na.omit(ssa_fdr_df[ssa_fdr_df$FDR <= 0.05 & abs(ssa_fdr_df$deltapsi) >= 0.1,])
 
+# ============================================================================
+# FIXED DATA PREPARATION - KEEP ALL EVENTS SEPARATE
+# ============================================================================
 
-differential_tub<-na.omit(tub_fdr_df[tub_fdr_df$FDR <= 0.05 & abs(tub_fdr_df$deltapsi) >= 0.1,])
-
-differential_pladb<-na.omit(pladb_fdr_df[pladb_fdr_df$FDR <= 0.05 & abs(pladb_fdr_df$deltapsi) >= 0.1,])
-
-differential_ssa<-na.omit(ssa_fdr_df[ssa_fdr_df$FDR <= 0.05 & abs(ssa_fdr_df$deltapsi) >= 0.1,])
-
-sig_genes<-unique(c(differential_tub$GENE,differential_pladb$GENE,differential_ssa$GENE))
-
-splicing_data <- getDataset(pathTables = paste0(getwd(),"/new_data_INCLUSION_LEVELS_FULL-mm10.tab"), 
-                            tool = "vast-tools")
-backgound_genes<-filter(splicing_data, !splicing_data$GENE %in% sig_genes)
-
-
-
-
-library(tidyverse)
-library(ggrepel)
-
-# 1) Combine differential lists
+# Combine differential lists - KEEP ALL ROWS (no summarizing!)
 differential_all <- bind_rows(
-  differential_tub %>% mutate(group = "Differential_TUB"),
-  differential_pladb %>% mutate(group = "Differential_PLADB"),
-  differential_ssa %>% mutate(group = "Differential_SSA")
-)
+  differential_tub %>% mutate(group = "Tubercidin"),
+  differential_pladb %>% mutate(group = "Pladienolide B"),
+  differential_ssa %>% mutate(group = "Spliceostatin A")
+) 
 
-# 2) Count in how many groups each gene appears
+differential_all$group<-factor(differential_all$group, levels=c("Tubercidin","Pladienolide B","Spliceostatin A"))
+
+# Count in how many groups each gene appears
 gene_counts <- differential_all %>%
   group_by(GENE) %>%
-  summarize(n_groups = n_distinct(group), .groups = "drop")
+  summarize(
+    n_groups = n_distinct(group),
+    groups_list = paste(sort(unique(group)), collapse = "+"),
+    .groups = "drop"
+  )
 
-# 3) Keep one row per gene per group for plotting points
-differential_all <- differential_all %>%
-  group_by(GENE, group) %>%
-  slice(1) %>%
-  ungroup() %>%
-  left_join(katarina_protein_stable_oocyte %>% select(GENE, stability), by = "GENE") %>%
-  left_join(gene_counts, by = "GENE")
+# Join with stability data - KEEP ONE ROW PER GENE-GROUP COMBINATION
+differential_summary <- differential_all %>%
+  left_join(katarina_clean %>% dplyr::select(GENE, stability), by = "GENE") %>%
+  left_join(gene_counts, by = "GENE") %>%
+  filter(!is.na(stability))  # Remove genes without stability data
 
-# 4) Define highlighting categories based on number of groups AND stability
-differential_all <- differential_all %>%
+# Define highlighting categories
+differential_summary <- differential_summary %>%
   mutate(
     highlight = case_when(
-      n_groups == 3 & stability > 10 ~ "All_3_HighStability",
-      n_groups == 2 & stability > 10 ~ "TwoGroups_HighStability",
-      stability > 10 ~ "High_Stability",
+      n_groups == 3 & stability > 10 ~ "All 3 Groups + High Stability",
+      n_groups == 3 ~ "All 3 Groups",
+      n_groups == 2 & stability > 10 ~ "2 Groups + High Stability",
+      n_groups == 2 ~ "2 Groups",
+      stability > 10 ~ "High Stability Only",
       TRUE ~ "Other"
     ),
-    point_size = case_when(
-      highlight == "All_3_HighStability" ~ 5,
-      highlight == "TwoGroups_HighStability" ~ 3.5,
-      highlight == "High_Stability" ~ 2.5,
-      TRUE ~ 1.5
-    ),
-    point_color = case_when(
-      highlight == "All_3_HighStability" ~ "red",
-      highlight == "TwoGroups_HighStability" ~ "#FF8C00",   # orange-ish for intersection of 2
-      highlight == "High_Stability" ~ "#00A1D7",            # cell blue
-      TRUE ~ "#999999"
-    )
+    highlight = factor(highlight, levels = c(
+      "All 3 Groups + High Stability",
+      "All 3 Groups",
+      "2 Groups + High Stability",
+      "2 Groups",
+      "High Stability Only",
+      "Other"
+    ))
   )
 
-# 5) Prepare labels: only one per gene
-label_genes <- differential_all %>%
-  filter(highlight != "Other") %>%
-  group_by(GENE) %>%
-  slice_max(point_size, n = 1) %>%  # choose most prominent category if duplicated
-  ungroup() %>%
-  mutate(fontface_label = ifelse(highlight == "All_3_HighStability", "bold", "plain"))
+# Prepare labels: only highly relevant genes
+# Label top genes by stability in each facet
+label_genes <- differential_summary %>%
+  filter(highlight %in% c("All 3 Groups + High Stability", 
+                          "2 Groups + High Stability")) %>%
+  group_by(group) %>%
+  arrange(desc(stability)) %>%
+  slice_head(n = 8) %>%  # Top 8 per facet
+  ungroup()
 
+# ============================================================================
+# PUBLICATION THEME
+# ============================================================================
 
-preferred_font<-"Roboto"
-font_add_google(preferred_font)
-showtext::showtext_opts(dpi=600)
-showtext_auto()   # ensures text is rendered via showtext (good for PDFs via cairo)
-
-base_family <- preferred_font
-
-# ------------------------
-# 2) Palette anchored on Cell blue
-# ------------------------
-cell_blue <- "#00A1D7"
-make_cell_palette <- function(n, main = cell_blue) {
-  anchors <- c(
-    main,        # anchor blue
-    "#0073A8",   # darker blue
-    "#9EE8FB",   # very light tint
-    "#4D4D4D",   # neutral dark (for outlines/contrasts)
-    "#E69F00"    # warm accent (sparingly)
-  )
-  if (n <= length(anchors)) {
-    anchors[1:n]
-  } else {
-    colorRampPalette(anchors)(n)
-  }
-}
-
-# ------------------------
-# 3) Publication theme (cell-inspired)
-# ------------------------
-theme_cellpub <- function(base_size = 18, base_family = base_family) {
-  theme_classic(base_size = base_size, base_family = base_family) %+replace%
+theme_publication <- function(base_size = 11) {
+  theme_classic(base_size = base_size) %+replace%
     theme(
-      axis.line = element_line(linewidth = 0.9, colour = "#222222"),
-      axis.ticks = element_line(linewidth = 0.9, colour = "#222222"),
-      axis.ticks.length = unit(3, "pt"),
-      axis.title = element_text(face = "plain", size = rel(1.0)),
-      axis.text = element_text(size = rel(0.95), colour = "#111111"),
-      legend.position = "top",
-      legend.direction = "horizontal",
-      legend.key.size = unit(10, "pt"),
+      # Axes
+      axis.line = element_line(linewidth = 0.6, colour = "black"),
+      axis.ticks = element_line(linewidth = 0.5, colour = "black"),
+      axis.ticks.length = unit(0.15, "cm"),
+      axis.title = element_text(face = "bold", size = rel(1.0)),
+      axis.text = element_text(size = rel(0.9), colour = "black"),
+      
+      # Legend
+      legend.position = "right",
       legend.background = element_blank(),
-      legend.title = element_blank(),
-      legend.text = element_text(size = rel(0.95)),
-      panel.grid.major.y = element_line(color = alpha("#666666", 0.10), linetype = "dashed", linewidth = 0.4),
-      panel.grid.major.x = element_blank(),
-      strip.background = element_blank(),
-      strip.text = element_text(face = "bold", size = rel(1.0)),
-      plot.title = element_text(face = "bold", size = rel(1.05), hjust = 0),
-      plot.subtitle = element_text(size = rel(0.95), hjust = 0),
-      plot.caption = element_text(size = rel(0.85), colour = "#666666"),
-      plot.margin = margin(6, 6, 6, 6)
+      legend.title = element_text(face = "bold", size = rel(0.95)),
+      legend.text = element_text(size = rel(0.85)),
+      legend.key.size = unit(0.4, "cm"),
+      legend.spacing.y = unit(0.1, "cm"),
+      
+      # Panel
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      
+      # Facets
+      strip.background = element_rect(fill = "grey95", color = "black", linewidth = 0.5),
+      strip.text = element_text(face = "bold", size = rel(1.0), margin = margin(5, 5, 5, 5)),
+      
+      # Plot
+      plot.title = element_text(face = "bold", size = rel(1.1), hjust = 0),
+      plot.subtitle = element_text(size = rel(0.9), hjust = 0, color = "grey30"),
+      plot.margin = margin(10, 10, 10, 10)
     )
 }
 
-base_family <- preferred_font
-# 6) Volcano-style plot
-p_volcano <- ggplot(differential_all, aes(x = deltapsi, y = stability)) +
-  geom_point(aes(size = point_size, color = point_color), alpha = 0.7, na.rm = TRUE) +
-  scale_size_identity() +
-  scale_color_identity() +
-  geom_hline(yintercept = 10, linetype = "dashed", color = "#666666") +
+# ============================================================================
+# CREATE FACETED VOLCANO PLOT
+# ============================================================================
+
+# Color palette
+color_palette <- c(
+  "All 3 Groups + High Stability" = "#D32F2F",    # Red
+  "All 3 Groups" = "#E57373",                      # Light red
+  "2 Groups + High Stability" = "#FF6F00",         # Orange
+  "2 Groups" = "#FFB74D",                          # Light orange
+  "High Stability Only" = "#1976D2",               # Blue
+  "Other" = "grey70"                               # Grey
+)
+
+# Size mapping
+size_palette <- c(
+  "All 3 Groups + High Stability" = 3,
+  "All 3 Groups" = 2.5,
+  "2 Groups + High Stability" = 2.5,
+  "2 Groups" = 2,
+  "High Stability Only" = 2,
+  "Other" = 1.5
+)
+
+# Alpha mapping
+alpha_palette <- c(
+  "All 3 Groups + High Stability" = 0.9,
+  "All 3 Groups" = 0.7,
+  "2 Groups + High Stability" = 0.8,
+  "2 Groups" = 0.6,
+  "High Stability Only" = 0.7,
+  "Other" = 0.3
+)
+
+p_volcano <- ggplot(differential_summary, aes(x = deltapsi, y = stability)) +
+  # Background points first (Other)
+  geom_point(
+    data = differential_summary %>% filter(highlight == "Other"),
+    aes(color = highlight, size = highlight, alpha = highlight)
+  ) +
+  # Foreground points (interesting ones)
+  geom_point(
+    data = differential_summary %>% filter(highlight != "Other"),
+    aes(color = highlight, size = highlight, alpha = highlight)
+  ) +
+  # Threshold lines
+  geom_hline(yintercept = 10, linetype = "dashed", color = "grey40", linewidth = 0.5) +
+  geom_vline(xintercept = 0, linetype = "solid", color = "grey60", linewidth = 0.4) +
+  # Labels
   geom_text_repel(
     data = label_genes,
     aes(label = GENE),
-    size = 3,
-    max.overlaps = 20,
-    fontface = label_genes$fontface_label
+    size = 2.5,
+    fontface = "bold",
+    max.overlaps = 15,
+    min.segment.length = 0,
+    segment.size = 0.3,
+    segment.alpha = 0.6,
+    box.padding = 0.3,
+    point.padding = 0.2,
+    force = 2,
+    seed = 42
   ) +
+  # Facet by group
+  facet_wrap(~group, ncol = 3) +
+  # Scales
+  scale_color_manual(values = color_palette, name = "Category") +
+  scale_size_manual(values = size_palette, guide = "none") +
+  scale_alpha_manual(values = alpha_palette, guide = "none") +
+  scale_x_continuous(expand = expansion(mult = 0.05)) +
+  scale_y_continuous(expand = expansion(mult = c(0.02, 0.08))) +
+  # Labels
   labs(
-    x = "ΔPSI",
-    y = "Stability",
-    title = "Differential Genes: ΔPSI vs Stability"
+    x = expression(bold(Delta*"PSI")),
+    y = "Protein Stability (%)",
+    title = "Differential Splicing vs Protein Stability by Treatment",
+    subtitle = paste0("Each point represents a significant splicing event (FDR < 0.05, |ΔPSI| ≥ 0.1)")
   ) +
-  theme_cellpub(base_size = 14)
+  # Theme
+  theme_publication(base_size = 10) +
+  guides(color = guide_legend(override.aes = list(size = 3, alpha = 0.9)))
 
-p_volcano
+# Check data before plotting
+cat("\n=== Data Check ===\n")
+cat("Total events to plot:", nrow(differential_summary), "\n")
+cat("Events per group:\n")
+print(table(differential_summary$group))
+cat("\nRange of deltapsi:", range(differential_summary$deltapsi, na.rm = TRUE), "\n")
+cat("Range of stability:", range(differential_summary$stability, na.rm = TRUE), "\n")
+cat("Number of labels:", nrow(label_genes), "\n\n")
 
-# ------------------------
-# 7) Saving recommendations (vector + high-res raster)
-# ------------------------
-# Single-column figure example (adjust sizes to journal specs if needed)
-ggsave("volcano_stability_deltapsi.pdf", plot = p_volcano, width = 6.5, height = 4.2, device = cairo_pdf)
-ggsave("volcano_stability_deltapsi.pdf", plot = p_volcano, width = 6.5, height = 4.2, dpi = 600)
+# Verify no near-zero deltapsi values
+near_zero <- differential_summary %>% filter(abs(deltapsi) < 0.05)
+if(nrow(near_zero) > 0) {
+  cat("WARNING: Found", nrow(near_zero), "events with |deltapsi| < 0.05\n")
+  print(head(near_zero))
+} else {
+  cat("✓ All deltapsi values are >= 0.1 as expected\n")
+}
+
+# Save plot
+cat("\nSaving plot to PDF...\n")
+ggsave("volcano_stability_deltapsi_faceted.pdf", plot = p_volcano, 
+       width = 14, height = 5, device = cairo_pdf)
+cat("Plot saved successfully to volcano_stability_deltapsi_faceted.pdf\n\n")
+
+# Try to display
+tryCatch({
+  print(p_volcano)
+}, error = function(e) {
+  cat("Note: Could not display plot in RStudio viewer, but PDF was saved successfully.\n")
+  cat("Error message:", e$message, "\n")
+})
+
+cat("\n=== Plot saved successfully ===\n")
+
+# Summary statistics
+cat("\n=== Summary Statistics ===\n")
+cat("\nBy highlight category:\n")
+print(table(differential_summary$highlight))
+cat("\nBy group:\n")
+print(table(differential_summary$group))
+cat("\nGenes appearing in multiple groups:\n")
+print(table(differential_summary$n_groups))
+cat("\nGenes with all 3 groups + high stability:\n")
+print(differential_summary %>% 
+        filter(highlight == "All 3 Groups + High Stability") %>% 
+        distinct(GENE) %>% 
+        pull(GENE))

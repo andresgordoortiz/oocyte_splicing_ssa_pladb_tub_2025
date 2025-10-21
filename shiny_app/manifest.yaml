@@ -1,0 +1,39 @@
+# ============================================================================
+# Posit Connect / RStudio Server Deployment Configuration
+# ============================================================================
+
+# This file contains deployment settings for Posit Connect and RStudio Server
+
+# Application metadata
+AppMode: shiny
+Title: Drug Splicing Effects Explorer
+Author: Andres Gordo
+AuthorEmail: andres.gordo@crg.eu
+
+# R version
+RVersion: 4.0.0
+
+# Package repositories
+Repos:
+  CRAN: https://cran.rstudio.com/
+  BioCsoft: https://bioconductor.org/packages/release/bioc
+  BioCann: https://bioconductor.org/packages/release/data/annotation
+  BioCexp: https://bioconductor.org/packages/release/data/experiment
+
+# Resource allocation (adjust as needed)
+MinProcesses: 1
+MaxProcesses: 3
+MinConnsPerProcess: 20
+MaxConnsPerProcess: 50
+LoadFactor: 0.5
+
+# Timeout settings (in seconds)
+ConnectionTimeout: 5
+ReadTimeout: 3600
+InitTimeout: 60
+
+# Logging
+LogLevel: info
+
+# Application settings
+RunAs: shiny

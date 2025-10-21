@@ -1,0 +1,229 @@
+/* ============================================================================
+   Custom Styles for Drug Splicing Effects Explorer
+   Professional scientific theme
+   ============================================================================ */
+
+/* Main header styling */
+.main-header .logo {
+  background-color: #2C3E50 !important; /* Professional dark blue-gray */
+  color: #ECF0F1 !important;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 600;
+  border-bottom: 3px solid #3498DB;
+}
+
+.main-header .navbar {
+  background-color: #34495E !important; /* Slightly lighter blue-gray */
+  border-bottom: 3px solid #3498DB;
+}
+
+.main-header .logo:hover {
+  background-color: #34495E !important;
+}
+
+/* Logo container in header */
+.header-logos {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 5px 15px;
+  background-color: #2C3E50;
+}
+
+.header-logos img {
+  height: 50px;
+  width: auto;
+  object-fit: contain;
+}
+
+/* Sidebar styling */
+.skin-blue .main-sidebar {
+  background-color: #2C3E50 !important;
+}
+
+.skin-blue .sidebar-menu > li.active > a,
+.skin-blue .sidebar-menu > li:hover > a {
+  background-color: #34495E !important;
+  border-left: 3px solid #3498DB !important;
+}
+
+.skin-blue .sidebar-menu > li > a {
+  color: #ECF0F1 !important;
+}
+
+/* Value boxes */
+.small-box {
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.small-box h3 {
+  font-weight: 600;
+}
+
+/* Box styling */
+.box {
+  border-top: 3px solid #3498DB;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  border-radius: 4px;
+}
+
+.box.box-solid.box-primary > .box-header {
+  background-color: #3498DB !important;
+}
+
+.box.box-solid.box-info > .box-header {
+  background-color: #5DADE2 !important;
+}
+
+.box-header.with-border {
+  border-bottom: 2px solid #ECF0F1;
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: #3498DB !important;
+  border-color: #2980B9 !important;
+  font-weight: 500;
+}
+
+.btn-primary:hover {
+  background-color: #2980B9 !important;
+  border-color: #21618C !important;
+}
+
+/* Data tables */
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+  color: #2C3E50;
+}
+
+table.dataTable thead th {
+  background-color: #ECF0F1;
+  font-weight: 600;
+  color: #2C3E50;
+  border-bottom: 2px solid #3498DB;
+}
+
+table.dataTable tbody tr:hover {
+  background-color: #EBF5FB !important;
+}
+
+/* Plot containers */
+.plot-container {
+  background-color: white;
+  padding: 15px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+/* Inputs styling */
+.form-control {
+  border: 1px solid #BDC3C7;
+  border-radius: 4px;
+}
+
+.form-control:focus {
+  border-color: #3498DB;
+  box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+}
+
+/* Slider inputs */
+.irs-bar {
+  background: #3498DB !important;
+}
+
+.irs-bar-edge {
+  background: #3498DB !important;
+}
+
+.irs-single {
+  background: #3498DB !important;
+}
+
+.irs-from, .irs-to {
+  background: #3498DB !important;
+}
+
+/* Select inputs */
+.selectize-input {
+  border: 1px solid #BDC3C7;
+  border-radius: 4px;
+}
+
+.selectize-input.focus {
+  border-color: #3498DB;
+  box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+}
+
+/* Tab content */
+.tab-content {
+  padding-top: 15px;
+}
+
+/* Info boxes */
+.info-box {
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border-radius: 4px;
+}
+
+/* Custom title styling */
+h3.box-title {
+  font-weight: 600;
+  color: #2C3E50;
+}
+
+/* Professional color scheme for drug colors */
+.drug-tubercidin {
+  color: #A0C1B9 !important;
+}
+
+.drug-pladienolide {
+  color: #70A0AF !important;
+}
+
+.drug-spliceostatin {
+  color: #706993 !important;
+}
+
+/* Footer */
+.main-footer {
+  background-color: #ECF0F1;
+  border-top: 2px solid #BDC3C7;
+  color: #2C3E50;
+  padding: 15px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .header-logos {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .header-logos img {
+    height: 35px;
+  }
+}
+
+/* Loading spinner */
+.shiny-output-error {
+  color: #E74C3C;
+}
+
+.shiny-output-error:before {
+  content: "⚠ ";
+}
+
+/* Download buttons */
+.btn-download {
+  margin-top: 10px;
+  font-weight: 500;
+}
+
+/* Plot hover tooltips */
+.plotly .hoverlayer .hovertext {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}

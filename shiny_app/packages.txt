@@ -1,0 +1,23 @@
+# R package dependencies for the Shiny application
+
+# CRAN packages
+shiny
+shinydashboard
+shinyWidgets
+DT
+dplyr
+ggplot2
+plotly
+readr
+tidyr
+ggrepel
+scales
+viridis
+gridExtra
+patchwork
+writexl
+rsconnect
+
+# Bioconductor packages (specify with bioc::)
+bioc::ComplexHeatmap
+bioc::circlize
