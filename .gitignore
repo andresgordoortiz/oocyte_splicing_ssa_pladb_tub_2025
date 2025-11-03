@@ -31,7 +31,8 @@ data/processed/*
 
 # File groups and specific data folders
 *to_combine/
-*tmp/
+*tmp*
+*Tmp*
 *gtf
 *fasta
 *fa
@@ -80,6 +81,7 @@ docs/
 # ---------------------------
 *.log
 *tmp*
+*Tmp*
 *.swp
 *.bak
 .DS_Store
