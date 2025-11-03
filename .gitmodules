@@ -1,3 +1,6 @@
 [submodule "vast-tools_nextflow"]
 	path = vast-tools_nextflow
 	url = https://github.com/andresgordoortiz/vast-tools_nextflow.git
+[submodule "betAS"]
+	path = betAS
+	url = https://github.com/DiseaseTranscriptomicsLab/betAS.git
