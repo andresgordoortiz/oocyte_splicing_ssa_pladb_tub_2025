@@ -2,7 +2,7 @@ library(dplyr)
 library(ggplot2)
 library(ggpubr)
 library(gridExtra)
-library(showtext)    # font_add_google(), showtext_auto()
+library(showtext)    
 
 # 1) Read event info
 event_info <- read.delim("EVENT_INFO-mm10.tab")
@@ -135,7 +135,11 @@ make_and_save_exons <- function(dataset_name,
   # ---- GC plot ----
   p_gc <- ggplot(all_exons, aes(x = splicing, y = gc, fill = splicing)) +
     geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.6, linewidth = 0.5) +
-    geom_jitter(width = 0.15, alpha = 0.5, size = 1.2) +
+    geom_jitter(
+      data = all_exons %>% filter(splicing != "Unchanged"),
+      aes(x = splicing, y = gc, fill = splicing),  # keeps mapping consistent
+      width = 0.15, alpha = 0.5, size = 1.2
+    ) +
     stat_compare_means(method = "wilcox.test", comparisons = comparisons, label = "p.signif", label.size = 4) +
     scale_fill_manual(values = splicing_colors) +
     labs(x = "Splicing Outcome", y = "GC Content (%)",
@@ -210,7 +214,11 @@ make_and_save_exons <- function(dataset_name,
     # Create plot with clipped data for display
     p_len <- ggplot(plot_data, aes(x = splicing, y = LE_o_display, fill = splicing)) +
       geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.6, linewidth = 0.5) +
-      geom_jitter(width = 0.15, alpha = 0.5, size = 1.2) +
+      geom_jitter(
+        data = plot_data %>% filter(splicing != "Unchanged"),
+        aes(x = splicing, y = LE_o_display, fill = splicing),
+        width = 0.15, alpha = 0.5, size = 1.2
+      ) +
       scale_fill_manual(values = splicing_colors) +
       labs(x = "Splicing Outcome", y = "Exon Length (nt)",
            title = paste0(ds_label, ": Exons — Length")) +
@@ -229,12 +237,6 @@ make_and_save_exons <- function(dataset_name,
       p_len <- p_len + coord_cartesian(ylim = c(NA, max_bar_pos * 1.05))
     }
 
-    # Add indicator for clipped outliers if any exist
-    n_outliers <- sum(plot_data$is_outlier)
-    if(n_outliers > 0) {
-      p_len <- p_len +
-        labs(caption = paste0("Note: ", n_outliers, " outliers > ", round(threshold_95), " nt clipped for display; statistics calculated on full data"))
-    }
   }
 
   # ---- Save files: separate GC and Length PNG + PDF ----
@@ -316,8 +318,9 @@ all_drugs_data <- bind_rows(
 ) %>%
   mutate(gc = gc_content(Seq_A))
 
+set.seed(123)
 # Add unchanged samples for each drug
-sample_max <- 1000
+sample_max <- 10000
 for(drug_code in c("ssa", "tub", "pladb")) {
   fdr_df <- get(paste0(drug_code, "_fdr_df"))
   diff_df <- get(paste0("differential_", drug_code))
@@ -357,20 +360,27 @@ message("Creating unified GC plot...")
 comparisons <- list(
   c("Included", "Skipped"),
   c("Included", "Unchanged"),
-  c("Included",  "Unchanged")
+  c("Skipped",  "Unchanged")
 )
 
 p_gc_unified <- ggplot(all_drugs_data, aes(x = splicing, y = gc, fill = splicing)) +
   geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.9, linewidth = 0.5, color = "black") +
-  geom_jitter(width = 0.15, size = 0.8, aes(color = splicing, alpha = splicing)) +
-  stat_compare_means(method = "wilcox.test", comparisons = comparisons, label = "p.signif", label.size = 3.5) +
+  geom_jitter(
+    data = all_drugs_data %>% filter(splicing != "Unchanged"),
+    aes(x = splicing, y = gc, color = splicing, alpha = splicing),
+    width = 0.15, size = 0.8
+  ) +
+  stat_compare_means(
+    method = "wilcox.test", 
+    comparisons = comparisons, 
+    label = "p.signif", 
+    label.size = 3.5,
+    hide.ns = FALSE  # Show all results including ns
+  ) +
   scale_fill_manual(values = splicing_colors) +
   scale_color_manual(values = splicing_colors) +
   scale_alpha_manual(values = c("Included" = 0.5, "Skipped" = 0.5, "Unchanged" = 0.15)) +
-  scale_y_continuous(
-    expand = expansion(mult = c(0.05, 0.15)),
-    limits = c(0, 100)
-  ) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.30))) +  # Extra space for significance bars
   scale_x_discrete(expand = expansion(mult = c(0, 0))) +
   facet_wrap(~ drug_label, nrow = 1) +
   labs(x = "Splicing Outcome", y = "GC Content (%)") +
@@ -390,33 +400,108 @@ p_gc_unified <- ggplot(all_drugs_data, aes(x = splicing, y = gc, fill = splicing
 # ---- Create unified Length plot with facet_wrap ----
 message("Creating unified Length plot...")
 
-# Clip at 95th percentile for display
+# Clip at 95th percentile for DISPLAY only
 threshold_95 <- quantile(all_drugs_data$LE_o, 0.95, na.rm = TRUE)
 plot_data_len <- all_drugs_data %>%
   filter(!is.na(LE_o)) %>%
   mutate(
-    LE_o_display = pmin(LE_o, threshold_95),
+    LE_o_display = pmin(LE_o, threshold_95),  # For display
     is_outlier = LE_o > threshold_95
   )
 
+# Calculate statistics on ORIGINAL unclipped data for each drug
+stat_results_unified <- purrr::map_dfr(levels(plot_data_len$drug), function(drug_code) {
+  drug_data <- plot_data_len %>% filter(drug == drug_code)
+  
+  purrr::map_dfr(comparisons, function(comp) {
+    g1 <- comp[1]; g2 <- comp[2]
+    
+    # CRITICAL: Use ORIGINAL LE_o values for statistical test (not clipped)
+    data_g1 <- drug_data$LE_o[drug_data$splicing == g1]
+    data_g2 <- drug_data$LE_o[drug_data$splicing == g2]
+    
+    if(length(data_g1) < 1 || length(data_g2) < 1) {
+      return(tibble(drug = drug_code, group1 = g1, group2 = g2, p.value = NA_real_))
+    }
+    
+    test_result <- tryCatch({
+      wilcox.test(data_g1, data_g2, exact = FALSE)
+    }, error = function(e) {
+      list(p.value = NA_real_)
+    })
+    
+    tibble(drug = drug_code, group1 = g1, group2 = g2, p.value = test_result$p.value)
+  })
+})
+
+# Convert p-values to significance symbols (KEEP ALL including ns)
+stat_results_unified <- stat_results_unified %>%
+  mutate(
+    p.signif = case_when(
+      is.na(p.value) ~ "ns",
+      p.value <= 0.001 ~ "***",
+      p.value <= 0.01 ~ "**",
+      p.value <= 0.05 ~ "*",
+      TRUE ~ "ns"
+    ),
+    drug_label = factor(drug_names[as.character(drug)], levels = drug_names[c("tub", "pladb", "ssa")])
+  )
+# NO FILTER - keep all results including "ns"
+
+# Position bars based on CLIPPED data range for each facet
+# Get max display value per drug for proper positioning
+max_display_per_drug <- plot_data_len %>%
+  group_by(drug) %>%
+  summarise(max_display = max(LE_o_display, na.rm = TRUE), .groups = 'drop')
+
+stat_results_unified <- stat_results_unified %>%
+  left_join(max_display_per_drug, by = "drug") %>%
+  group_by(drug) %>%
+  mutate(
+    step_size = max_display * 0.08,
+    y.position = max_display + step_size * row_number()
+  ) %>%
+  ungroup()
+
+# Create the plot
 p_len_unified <- ggplot(plot_data_len, aes(x = splicing, y = LE_o_display, fill = splicing)) +
   geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.9, linewidth = 0.5, color = "black") +
-  geom_jitter(width = 0.15, size = 0.8, aes(color = splicing, alpha = splicing)) +
-  stat_compare_means(method = "wilcox.test", comparisons = comparisons, label = "p.signif", label.size = 3.5) +
+  geom_jitter(
+    data = plot_data_len %>% filter(splicing != "Unchanged"),
+    aes(x = splicing, y = LE_o_display, color = splicing, alpha = splicing),
+    width = 0.15, size = 0.8
+  ) +
+  stat_pvalue_manual(
+    stat_results_unified,
+    xmin = "group1", 
+    xmax = "group2",
+    y.position = "y.position", 
+    label = "p.signif",
+    tip.length = 0.02, 
+    label.size = 3.5
+  ) +
   scale_fill_manual(values = splicing_colors) +
   scale_color_manual(values = splicing_colors) +
   scale_alpha_manual(values = c("Included" = 0.5, "Skipped" = 0.5, "Unchanged" = 0.15)) +
-  scale_y_continuous(expand = expansion(mult = c(0.05, 0.25))) +  # Extra space at top for significance
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.30))) +  # Extra space for significance bars
   scale_x_discrete(expand = expansion(mult = c(0, 0))) +
   facet_wrap(~ drug_label, nrow = 1) +
-  labs(x = "Splicing Outcome", y = "Exon Length (nt)") +
+  labs(
+    x = "Splicing Outcome", 
+    y = "Exon Length (nt)"
+  ) +
   my_theme +
   theme(
     legend.position = "none",
     axis.text.x = element_text(angle = 45, hjust = 1, size = rel(0.85)),
     strip.background = element_blank(),
-    strip.text = element_text(face = "bold", size = rel(0.95)),
-    panel.spacing = unit(0.5, "lines")
+    strip.text = element_text(
+      face = "bold", 
+      size = rel(0.95),
+      margin = margin(b = 12, t = 2)
+    ),
+    panel.spacing = unit(0.5, "lines"),
+    plot.caption = element_text(size = rel(0.75), hjust = 0.5, margin = margin(t = 8))
   )
 
 # ---- Save unified plots ----
@@ -428,7 +513,7 @@ ggsave("exons_unified_length.png", plot = p_len_unified, width = 10, height = 3.
 ggsave("exons_unified_length.pdf", plot = p_len_unified, device = cairo_pdf, width = 10, height = 3.5)
 message("  -> saved: exons_unified_length.png and exons_unified_length.pdf")
 
-message("\nAll done!")
+message("\nAll unified plots completed!")
 
 # ---- Create unified combined plot ----
 library(patchwork)

@@ -3,7 +3,7 @@ library(tidyverse)
 library(clusterProfiler)
 library(org.Mm.eg.db)
 library(enrichplot)
-library(enrichR)
+library(pathview)
 library(cowplot)
 library(ggrepel)
 library(scales)
@@ -63,13 +63,11 @@ pub_theme <- theme_minimal(base_size = 12) +
     panel.grid = element_blank()
   )
 
-output_dir <- "GO_enrichment_results"
+output_dir <- "KEGG_enrichment_results"
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
-enrichr_dbs <- c("GO_Biological_Process_2021","GO_Molecular_Function_2021","GO_Cellular_Component_2021")
-
-# Store GO results for comparison
-all_go_results <- list()
+# Store KEGG results for comparison
+all_kegg_results <- list()
 
 # -------------------- Main loop --------------------
 for (nm in names(datasets)) {
@@ -115,90 +113,55 @@ for (nm in names(datasets)) {
     next
   }
   
-  run_enrichGO_safe <- function(gvec, ont) {
-    tryCatch({
-      result <- NULL
-      if (use_entrez) {
-        result <- enrichGO(gene = gvec, OrgDb = org.Mm.eg.db, ont = ont, keyType = "ENTREZID",
-                           pAdjustMethod = "BH", pvalueCutoff = 0.05, qvalueCutoff = 0.05, readable = TRUE)
-      } else {
-        result <- enrichGO(gene = unique(na.omit(as.character(genes_orig))), OrgDb = org.Mm.eg.db, ont = ont,
-                           keyType = "SYMBOL", pAdjustMethod = "BH", pvalueCutoff = 0.05, qvalueCutoff = 0.05, readable = TRUE)
-      }
-      
-      # Check if result is valid
-      if (!is.null(result) && nrow(as.data.frame(result)) > 0) {
-        result_df <- as.data.frame(result)
-        # Check gene counts
-        gene_counts <- as.numeric(sapply(strsplit(as.character(result_df$GeneRatio), "/"), function(x) x[1]))
-        valid_count <- sum(gene_counts > 0)
-        message("  ", ont, ": ", nrow(result_df), " terms found, ", valid_count, " with genes > 0")
-        
-        if (valid_count == 0) {
-          message("  WARNING: All terms have 0 genes! This indicates a mapping problem.")
-          return(NULL)
-        }
-      }
-      
-      return(result)
-    }, error = function(e) {
-      message("enrichGO error (", nm, ", ", ont, "): ", e$message)
-      NULL
-    })
+  # KEGG enrichment requires Entrez IDs
+  if (!use_entrez || length(genes_entrez) == 0) {
+    message("ERROR: KEGG requires valid Entrez IDs. Skipping ", nm)
+    next
   }
   
-  ego_bp <- run_enrichGO_safe(genes_entrez, "BP")
-  ego_mf <- run_enrichGO_safe(genes_entrez, "MF")
-  ego_cc <- run_enrichGO_safe(genes_entrez, "CC")
+  # Run KEGG enrichment
+  kegg_result <- tryCatch({
+    enrichKEGG(gene = genes_entrez,
+               organism = 'mmu',  # mouse
+               keyType = 'ncbi-geneid',
+               pAdjustMethod = "BH",
+               pvalueCutoff = 0.05,
+               qvalueCutoff = 0.05)
+  }, error = function(e) {
+    message("enrichKEGG error (", nm, "): ", e$message)
+    NULL
+  })
   
-  # Store BP results for comparison
-  if (!is.null(ego_bp) && nrow(as.data.frame(ego_bp)) > 0) {
-    ego_bp_df <- as.data.frame(ego_bp)
-    # Filter out invalid entries with 0 genes
-    ego_bp_df <- ego_bp_df %>%
-      mutate(gene_count = as.numeric(sapply(strsplit(as.character(GeneRatio), "/"), function(x) x[1]))) %>%
-      filter(gene_count > 0) %>%
-      dplyr::select(-gene_count)
+  # Check if result is valid
+  if (!is.null(kegg_result) && nrow(as.data.frame(kegg_result)) > 0) {
+    kegg_df <- as.data.frame(kegg_result)
+    # Check gene counts
+    gene_counts <- as.numeric(sapply(strsplit(as.character(kegg_df$GeneRatio), "/"), function(x) x[1]))
+    valid_count <- sum(gene_counts > 0)
+    message("  KEGG: ", nrow(kegg_df), " pathways found, ", valid_count, " with genes > 0")
     
-    if (nrow(ego_bp_df) > 0) {
-      all_go_results[[nm]] <- ego_bp_df
+    if (valid_count > 0) {
+      # Filter out invalid entries with 0 genes
+      kegg_df <- kegg_df %>%
+        mutate(gene_count = as.numeric(sapply(strsplit(as.character(GeneRatio), "/"), function(x) x[1]))) %>%
+        filter(gene_count > 0) %>%
+        dplyr::select(-gene_count)
+      
+      all_kegg_results[[nm]] <- kegg_df
+      
+      # Save results
+      write.csv(kegg_df, file.path(output_dir, paste0(nm, "_KEGG.csv")), row.names = FALSE)
+      message("Saved: ", file.path(output_dir, paste0(nm, "_KEGG.csv")))
     }
-  }
-  
-  # Save CSVs
-  save_if <- function(x, suffix) {
-    if (!is.null(x) && nrow(as.data.frame(x)) > 0) {
-      f <- file.path(output_dir, paste0(nm, "_", suffix, ".csv"))
-      write.csv(as.data.frame(x), f, row.names = FALSE)
-      message("Saved: ", f)
-    }
-  }
-  save_if(ego_bp, "GO_BP")
-  save_if(ego_mf, "GO_MF")
-  save_if(ego_cc, "GO_CC")
-  
-  # Enrichr (optional)
-  if (length(unique(na.omit(genes_orig))) >= 5) {
-    try({
-      enr <- enrichr(unique(na.omit(as.character(genes_orig))), enrichr_dbs)
-      for (db in names(enr)) {
-        if (!is.null(enr[[db]]) && nrow(enr[[db]]) > 0) {
-          fdb <- file.path(output_dir, paste0(nm, "_Enrichr_", db, ".csv"))
-          write.csv(enr[[db]], fdb, row.names = FALSE)
-          message("Saved Enrichr: ", fdb)
-        }
-      }
-    }, silent = TRUE)
+  } else {
+    message("No significant KEGG pathways for ", nm)
   }
   
   # -------------------- Enhanced Plots --------------------
-  plots <- list()
-  
-  if (!is.null(ego_bp) && nrow(as.data.frame(ego_bp)) > 0) {
-    # Enhanced dot plot with connecting lines and improved aesthetics
-    ego_df <- as.data.frame(ego_bp) %>%
+  if (!is.null(kegg_result) && nrow(as.data.frame(kegg_result)) > 0) {
+    kegg_df <- as.data.frame(kegg_result) %>%
       mutate(gene_count = as.numeric(sapply(strsplit(as.character(GeneRatio), "/"), function(x) x[1]))) %>%
-      filter(gene_count > 0) %>%  # Remove entries with 0 genes
+      filter(gene_count > 0) %>%
       arrange(desc(Count)) %>%
       slice_head(n = 20) %>%
       mutate(
@@ -207,15 +170,14 @@ for (nm in names(datasets)) {
         Description = factor(Description, levels = rev(Description))
       )
     
-    if (nrow(ego_df) == 0) {
-      message("No valid BP enrichment for ", nm, " after filtering")
-    } else {
+    if (nrow(kegg_df) > 0) {
       # Print p-value range for verification
       message("P-value range for ", nm, ": ", 
-              formatC(min(ego_df$p.adjust), format = "e", digits = 2), " to ",
-              formatC(max(ego_df$p.adjust), format = "e", digits = 2))
+              formatC(min(kegg_df$p.adjust), format = "e", digits = 2), " to ",
+              formatC(max(kegg_df$p.adjust), format = "e", digits = 2))
       
-      p_enhanced_dot <- ggplot(ego_df, aes(x = GeneRatio_numeric, y = Description)) +
+      # Enhanced dot plot
+      p_enhanced_dot <- ggplot(kegg_df, aes(x = GeneRatio_numeric, y = Description)) +
         geom_segment(aes(x = 0, xend = GeneRatio_numeric, y = Description, yend = Description),
                      color = "gray70", linewidth = 0.8) +
         geom_point(aes(size = Count, color = p.adjust), alpha = 0.8) +
@@ -226,7 +188,7 @@ for (nm in names(datasets)) {
                              guide = guide_colorbar(reverse = TRUE)) +
         scale_size_continuous(name = "Gene\nCount", range = c(3, 10)) +
         scale_x_continuous(expand = expansion(mult = c(0.05, 0.15))) +
-        labs(title = paste0("GO Biological Process — ", nm),
+        labs(title = paste0("KEGG Pathway Enrichment — ", nm),
              x = "Gene Ratio",
              y = NULL) +
         theme_minimal(base_size = 12) +
@@ -245,30 +207,33 @@ for (nm in names(datasets)) {
           axis.ticks.x = element_line(color = "black")
         )
       
-      plots$bp_enhanced_dot <- p_enhanced_dot
-      ggsave(file.path(output_dir, paste0(nm, "_BP_enhanced_dot.pdf")), 
-             p_enhanced_dot, width = 9, height = 7)
-      ggsave(file.path(output_dir, paste0(nm, "_BP_enhanced_dot.png")), 
-             p_enhanced_dot, width = 9, height = 7, dpi = 300)
+      ggsave(file.path(output_dir, paste0(nm, "_KEGG_enhanced_dot.pdf")), 
+             p_enhanced_dot, width = 10, height = 7)
+      ggsave(file.path(output_dir, paste0(nm, "_KEGG_enhanced_dot.png")), 
+             p_enhanced_dot, width = 10, height = 7, dpi = 300)
       
-      # Standard plots
-      p_bar <- barplot(ego_bp, showCategory = 12, title = paste0("GO BP (top) — ", nm)) + pub_theme
-      plots$bp_bar <- p_bar
-      ggsave(file.path(output_dir, paste0(nm, "_BP_bar.pdf")), p_bar, width = 6.5, height = 5)
-      ggsave(file.path(output_dir, paste0(nm, "_BP_bar.png")), p_bar, width = 6.5, height = 5, dpi = 300)
+      # Standard bar plot
+      p_bar <- barplot(kegg_result, showCategory = 15, title = paste0("KEGG Pathways — ", nm)) + pub_theme
+      ggsave(file.path(output_dir, paste0(nm, "_KEGG_bar.pdf")), p_bar, width = 7, height = 5.5)
+      ggsave(file.path(output_dir, paste0(nm, "_KEGG_bar.png")), p_bar, width = 7, height = 5.5, dpi = 300)
       
-      top_k <- min(6, nrow(as.data.frame(ego_bp)))
+      # Dot plot
+      p_dot <- dotplot(kegg_result, showCategory = 15, title = paste0("KEGG Pathways — ", nm)) + pub_theme
+      ggsave(file.path(output_dir, paste0(nm, "_KEGG_dot.pdf")), p_dot, width = 7, height = 5.5)
+      ggsave(file.path(output_dir, paste0(nm, "_KEGG_dot.png")), p_dot, width = 7, height = 5.5, dpi = 300)
+      
+      # Gene-concept network
+      top_k <- min(8, nrow(as.data.frame(kegg_result)))
       try({
-        p_cnet <- cnetplot(ego_bp, showCategory = top_k, foldChange = NULL, 
+        p_cnet <- cnetplot(kegg_result, showCategory = top_k, foldChange = NULL, 
                            circular = FALSE, colorCategory = FALSE) +
-          ggtitle(paste0("Gene-Concept Network — ", nm)) + pub_theme
-        plots$bp_cnet <- p_cnet
-        ggsave(file.path(output_dir, paste0(nm, "_BP_cnet.pdf")), p_cnet, width = 8, height = 6)
-        ggsave(file.path(output_dir, paste0(nm, "_BP_cnet.png")), p_cnet, width = 8, height = 6, dpi = 300)
+          ggtitle(paste0("Gene-Pathway Network — ", nm)) + pub_theme
+        ggsave(file.path(output_dir, paste0(nm, "_KEGG_cnet.pdf")), p_cnet, width = 9, height = 7)
+        ggsave(file.path(output_dir, paste0(nm, "_KEGG_cnet.png")), p_cnet, width = 9, height = 7, dpi = 300)
       }, silent = TRUE)
+      
+      message("Created plots for ", nm)
     }
-  } else {
-    message("No significant BP enrichment for ", nm)
   }
   
   # Summary
@@ -277,28 +242,26 @@ for (nm in names(datasets)) {
   cat("Dataset:", nm, "\n")
   cat("Input genes (unique):", length(unique(na.omit(genes_orig))), "\n")
   cat("Mapped Entrez (count):", length(genes_entrez), "\n")
-  cat("GO BP terms:", ifelse(is.null(ego_bp), 0, nrow(as.data.frame(ego_bp))), "\n")
-  cat("GO MF terms:", ifelse(is.null(ego_mf), 0, nrow(as.data.frame(ego_mf))), "\n")
-  cat("GO CC terms:", ifelse(is.null(ego_cc), 0, nrow(as.data.frame(ego_cc))), "\n")
+  cat("KEGG pathways:", ifelse(is.null(kegg_result), 0, nrow(as.data.frame(kegg_result))), "\n")
   sink()
   message("Wrote summary: ", summary_file)
 }
 
-# -------------------- Common GO Terms Analysis --------------------
-message("\n---- Analyzing common GO terms across treatments ----")
+# -------------------- Common KEGG Pathways Analysis --------------------
+message("\n---- Analyzing common KEGG pathways across treatments ----")
 
-if (length(all_go_results) >= 2) {
-  # Find common GO terms
-  all_terms <- lapply(all_go_results, function(x) x$Description)
-  common_terms <- Reduce(intersect, all_terms)
+if (length(all_kegg_results) >= 2) {
+  # Find common pathways
+  all_pathways <- lapply(all_kegg_results, function(x) x$Description)
+  common_pathways <- Reduce(intersect, all_pathways)
   
-  message("Common GO terms found: ", length(common_terms))
+  message("Common KEGG pathways found: ", length(common_pathways))
   
-  if (length(common_terms) > 0) {
+  if (length(common_pathways) > 0) {
     # Prepare comparison data
-    comparison_data <- do.call(rbind, lapply(names(all_go_results), function(nm) {
-      df <- all_go_results[[nm]]
-      df_common <- df[df$Description %in% common_terms, ]
+    comparison_data <- do.call(rbind, lapply(names(all_kegg_results), function(nm) {
+      df <- all_kegg_results[[nm]]
+      df_common <- df[df$Description %in% common_pathways, ]
       if (nrow(df_common) > 0) {
         data.frame(
           Treatment = nm,
@@ -311,19 +274,19 @@ if (length(all_go_results) >= 2) {
       }
     }))
     
-    # Save common terms
+    # Save common pathways
     write.csv(comparison_data, 
-              file.path(output_dir, "common_GO_terms.csv"), 
+              file.path(output_dir, "common_KEGG_pathways.csv"), 
               row.names = FALSE)
     
-    # Select top terms by average gene ratio or significance
+    # Select top pathways by average gene ratio or significance
     top_common <- comparison_data %>%
       group_by(Description) %>%
       summarise(avg_ratio = mean(GeneRatio), 
                 min_pval = min(p.adjust),
                 .groups = "drop") %>%
       arrange(desc(avg_ratio)) %>%
-      slice_head(n = min(15, length(common_terms))) %>%
+      slice_head(n = min(20, length(common_pathways))) %>%
       pull(Description)
     
     plot_data <- comparison_data %>%
@@ -341,7 +304,7 @@ if (length(all_go_results) >= 2) {
       scale_size_continuous(name = "Genes", range = c(4, 14)) +
       scale_x_discrete(expand = expansion(add = 1.2)) +
       scale_y_discrete(expand = expansion(add = 1.5)) +
-      labs(title = "Common GO Terms Across Treatments",
+      labs(title = "Common KEGG Pathways Across Treatments",
            x = NULL,
            y = NULL) +
       theme_void(base_size = 12) +
@@ -359,10 +322,10 @@ if (length(all_go_results) >= 2) {
         plot.margin = margin(25, 25, 25, 25)
       )
     
-    ggsave(file.path(output_dir, "common_GO_comparison.pdf"), 
-           p_comparison, width = 8, height = 9)
-    ggsave(file.path(output_dir, "common_GO_comparison.png"), 
-           p_comparison, width = 8, height = 9, dpi = 300)
+    ggsave(file.path(output_dir, "common_KEGG_comparison.pdf"), 
+           p_comparison, width = 8, height = 10)
+    ggsave(file.path(output_dir, "common_KEGG_comparison.png"), 
+           p_comparison, width = 8, height = 10, dpi = 300)
     
     # Alternative: heatmap-style plot
     p_heatmap <- ggplot(plot_data, aes(x = Treatment, y = Description, fill = GeneRatio)) +
@@ -371,7 +334,7 @@ if (length(all_go_results) >= 2) {
       scale_fill_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b",
                            midpoint = median(plot_data$GeneRatio),
                            name = "Gene\nRatio") +
-      labs(title = "Common GO Terms - Heatmap View",
+      labs(title = "Common KEGG Pathways - Heatmap View",
            x = NULL, y = NULL) +
       theme_minimal(base_size = 12) +
       theme(
@@ -382,21 +345,21 @@ if (length(all_go_results) >= 2) {
         panel.grid = element_blank()
       )
     
-    ggsave(file.path(output_dir, "common_GO_heatmap.pdf"), 
-           p_heatmap, width = 7, height = 7)
-    ggsave(file.path(output_dir, "common_GO_heatmap.png"), 
-           p_heatmap, width = 7, height = 7, dpi = 300)
+    ggsave(file.path(output_dir, "common_KEGG_heatmap.pdf"), 
+           p_heatmap, width = 7, height = 8)
+    ggsave(file.path(output_dir, "common_KEGG_heatmap.png"), 
+           p_heatmap, width = 7, height = 8, dpi = 300)
     
-    message("Created comparison plots for common GO terms")
+    message("Created comparison plots for common KEGG pathways")
   } else {
-    message("No common GO terms found across all treatments")
+    message("No common KEGG pathways found across all treatments")
   }
 } else {
-  message("Need at least 2 treatments with GO results for comparison")
+  message("Need at least 2 treatments with KEGG results for comparison")
 }
 
 message("\nCompleted! All outputs in: ", normalizePath(output_dir))
 message("Check for:")
-message("  - Enhanced dot plots: *_BP_enhanced_dot.png")
-message("  - Common terms comparison: common_GO_comparison.png")
-message("  - Common terms heatmap: common_GO_heatmap.png")
+message("  - Enhanced dot plots: *_KEGG_enhanced_dot.png")
+message("  - Common pathways comparison: common_KEGG_comparison.png")
+message("  - Common pathways heatmap: common_KEGG_heatmap.png")

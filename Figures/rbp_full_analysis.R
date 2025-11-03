@@ -23,7 +23,7 @@
   # Harmonious splicing colors (complementary to drug palette)
   splicing_colors <- c(
     "Retained" = "#D4A574",  # Warm sand (complementary to cool drug colors)
-    "Removed" = "#B85450"    # Muted coral (harmonious contrast)
+    "Excised" = "#B85450"    # Muted coral (harmonious contrast)
   )
 
   # Region colors (matching the FULL region names from region_map)
@@ -94,7 +94,7 @@
     }
     
     up_filtered <- filter_by_any_R(up_data, "Retained")      # FIXED: Introns retained
-    down_filtered <- filter_by_any_R(down_data, "Removed")   # FIXED: Introns removed (spliced out)
+    down_filtered <- filter_by_any_R(down_data, "Excised")   # FIXED: Introns excised (spliced out)
     
     combined <- bind_rows(up_filtered, down_filtered)
     
@@ -166,7 +166,7 @@
   # Label top 5 RBPs per region per drug per source
   label_data <- track_data %>%
     group_by(drug_label, position, source) %>%
-    slice_max(order_by = neglog10p, n = 5, with_ties = FALSE) %>%
+    slice_max(order_by = neglog10p, n = 3, with_ties = FALSE) %>%
     ungroup()
   
   # Vertical separators at region boundaries
@@ -193,7 +193,7 @@
     geom_text_repel(
       data = label_data,
       aes(x = mid, y = neglog10p, label = RBP_clean, color = source),
-      size = 2.2, fontface = "bold", alpha = 0.9,
+      size = 3, fontface = "bold", alpha = 0.9,
       max.overlaps = Inf,
       min.segment.length = 0.1,
       segment.size = 0.3,
@@ -240,7 +240,7 @@
   
   boxplot_data <- all_drugs %>%
     filter(!is.na(neglog10p)) %>%
-    mutate(source = factor(source, levels = c("Retained", "Removed")))  # FIXED
+    mutate(source = factor(source, levels = c("Retained", "Excised")))  # FIXED
   
   # Wilcoxon tests
   stat_tests <- boxplot_data %>%
@@ -248,7 +248,7 @@
     summarize(
       p_value = tryCatch({
         wilcox.test(neglog10p[source == "Retained"],  # FIXED
-                    neglog10p[source == "Removed"])$p.value  # FIXED
+                    neglog10p[source == "Excised"])$p.value  # FIXED
       }, error = function(e) NA_real_),
       .groups = "drop"
     ) %>%
@@ -335,7 +335,7 @@
   # FIXED: Use only R1-R5 (the 5 positions that are actually defined in region_map)
   positions <- paste0("R", 1:5)
   drugs <- c("Tubercidin", "Pladienolide B", "Spliceostatin A")
-  sources <- c("Retained", "Removed")
+  sources <- c("Retained", "Excised")
   
   # Create ordered column names for R1-R5 only
   col_order <- c()
@@ -465,7 +465,7 @@
     geom_bar(aes(alpha = source), stat = "identity",
              position = position_dodge(width = 0.8), width = 0.7) +
     scale_fill_manual(values = drug_colors, name = "Drug") +
-    scale_alpha_manual(values = c("Retained" = 1, "Removed" = 0.6),
+    scale_alpha_manual(values = c("Retained" = 1, "Excised" = 0.6),
                        name = "Splicing") +
     labs(
       title = "Number of Significant RBPs by Region",
@@ -508,7 +508,7 @@
     grid.text("Comprehensive RBP Binding Analysis Across Drug Treatments",
               x = 0.5, y = 0.98,
               gp = gpar(fontsize = 18, fontface = "bold"))
-    grid.text("Differential binding patterns at splice sites for retained vs. removed introns",
+    grid.text("Differential binding patterns at splice sites for retained vs. excised introns",
               x = 0.5, y = 0.95,
               gp = gpar(fontsize = 13, col = "grey30"))
 

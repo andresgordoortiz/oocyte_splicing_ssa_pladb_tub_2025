@@ -251,7 +251,7 @@ p <- ggplot(full_rows) +
 # Add labels
 labels_df <- full_rows %>%
   group_by(dataset, Impact) %>%
-  summarise(median_y = median(y), prop = first(prop), tone = first(tone), .groups = "drop") %>%
+  summarise(median_y = median(y), prop = dplyr::first(prop), tone = dplyr::first(tone), .groups = "drop") %>%
   arrange(dataset, Impact) %>%
   mutate(pct_text = paste0(percent(prop, accuracy = 0.1)),
          name_text = Impact,

@@ -56,7 +56,7 @@ dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
 # Enhanced dot plot function matching the short script style
 create_enhanced_go_dotplot <- function(ego_result, ontology_name = "BP", 
-                                       treatment_name = "", top_n = 20, 
+                                       treatment_name = "", top_n = 15, 
                                        output_file = NULL) {
   ego_df <- as.data.frame(ego_result) %>%
     mutate(gene_count = as.numeric(sapply(strsplit(as.character(GeneRatio), "/"), 
