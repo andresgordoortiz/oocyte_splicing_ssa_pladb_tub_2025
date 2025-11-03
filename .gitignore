@@ -16,6 +16,14 @@
 *.pdf
 *.gz*
 *.tab
+*.txt
+*.jpeg
+*.jpg
+*.png
+*.svg
+*.tsv
+*.xlsx
+data/
 data/processed/*
 /downloads
 /work
@@ -43,6 +51,30 @@ results/**/*.png
 # Notebooks and temporary outputs
 
 *combination_table*
+
+# ---------------------------
+# Specific Directories
+# ---------------------------
+matt_out/
+renv/
+rmaps_out/
+scripts/
+workflows/
+docs/
+
+# ---------------------------
+# R-related Files
+# ---------------------------
+*.RData
+*.Rdata
+*.rdata
+*.RDS
+*.rds
+*.tp
+.Rprofile
+*.Rproj
+*.Rproj.user
+
 # ---------------------------
 # Temporary and Log Files
 # ---------------------------
@@ -64,7 +96,6 @@ VASTDB/*
 # Compiled files and environments
 __pycache__/
 *.Rhistory
-*.Rproj.user
 *.ipynb_checkpoints/
 .venv/
 .env
