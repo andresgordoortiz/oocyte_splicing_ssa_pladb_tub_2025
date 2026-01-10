@@ -20,11 +20,9 @@ library(ggtext)
 # ==============================================================================
 
 # ---- Setup fonts and theme ----
-preferred_font <- "Noto Sans"
-font_add_google(preferred_font, bold.wt = 700)
 showtext::showtext_opts(dpi = 300)
 showtext_auto(enable = TRUE)
-base_family <- preferred_font
+base_family <- "sans"
 
 # Drug treatment colors
 drug_colors <- c(
@@ -49,12 +47,12 @@ direction_colors <- c(
 
 # ---- Read data ----
 message("Reading data files...")
-tub_ex <- read_tsv("matt_out/tub_ex/tub_exons_with_efeatures.tab", show_col_types = FALSE)
-tub_int <- read_tsv("matt_out/tub_int/tub_introns_with_ifeatures.tab", show_col_types = FALSE)
-pladb_ex <- read_tsv("matt_out/pladb_ex/pladb_exons_with_efeatures.tab", show_col_types = FALSE)
-pladb_int <- read_tsv("matt_out/pladb_int/pladb_introns_with_ifeatures.tab", show_col_types = FALSE)
-ssa_ex <- read_tsv("matt_out/ssa_ex/ssa_exons_with_efeatures.tab", show_col_types = FALSE)
-ssa_int <- read_tsv("matt_out/ssa_int/ssa_introns_with_ifeatures.tab", show_col_types = FALSE)
+tub_ex <- read_tsv("Supplementary3_matt_out/tub_ex/tub_exons_with_efeatures.tab", show_col_types = FALSE)
+tub_int <- read_tsv("Supplementary3_matt_out/tub_int/tub_introns_with_ifeatures.tab", show_col_types = FALSE)
+pladb_ex <- read_tsv("Supplementary3_matt_out/pladb_ex/pladb_exons_with_efeatures.tab", show_col_types = FALSE)
+pladb_int <- read_tsv("Supplementary3_matt_out/pladb_int/pladb_introns_with_ifeatures.tab", show_col_types = FALSE)
+ssa_ex <- read_tsv("Supplementary3_matt_out/ssa_ex/ssa_exons_with_efeatures.tab", show_col_types = FALSE)
+ssa_int <- read_tsv("Supplementary3_matt_out/ssa_int/ssa_introns_with_ifeatures.tab", show_col_types = FALSE)
 
 # Read existing statistical results
 stats <- read_csv("feature_comparison_statistics.csv", show_col_types = FALSE)

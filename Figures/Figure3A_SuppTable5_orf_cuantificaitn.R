@@ -2,11 +2,16 @@ library(tidyverse)
 library(scales)
 library(ggpubr)
 library(rstatix)
+library(readxl)
 
-# Import betAS output tables
-tub_fdr_df <- read_csv("tub_fdr.csv")[,-1]
-pladb_fdr_df <- read_csv("pladb_fdr.csv")[,-1]
-ssa_fdr_df <- read_csv("ssa_fdr.csv")[,-1]
+
+# ---- 1. Import from the combined Excel file ----
+excel_file <- "Preprocessing/betAS_out/Supplementary2_betAS_splicing_results.xlsx"
+
+# Read each sheet (using the names we set in the previous step)
+tub_fdr_df   <- read_excel(excel_file, sheet = "Tub_FDR")
+pladb_fdr_df <- read_excel(excel_file, sheet = "PlaDB_FDR")
+ssa_fdr_df   <- read_excel(excel_file, sheet = "SSA_FDR")
 
 # Base colors
 ssa_color   <- "#706993"
@@ -21,9 +26,23 @@ differential_pladb <- na.omit(pladb_fdr_df[pladb_fdr_df$FDR <= 0.05 & abs(pladb_
 differential_ssa   <- na.omit(ssa_fdr_df[ssa_fdr_df$FDR <= 0.05 & abs(ssa_fdr_df$deltapsi) >= 0.1,])
 
 # Protein impact lookup
-protein_impact <- read.table("PROT_IMPACT-mm10-v2.3.tab", sep = "\t",
-                             header = TRUE, stringsAsFactors = FALSE, fill = TRUE, quote = "") %>%
-  dplyr::rename("EVENT"=EventID)
+# Define the filename
+file_path <- "PROT_IMPACT-mm10-v2.3.tab"
+
+# Check if the file exists
+if (!file.exists(file_path)) {
+  stop(paste("File '", file_path, "' not found. ",
+             "Please download it from the VASTDB website: https://vastdb.crg.eu/wiki/Main_Page", 
+             sep = ""))
+}
+
+# Protein impact lookup (only runs if file exists)
+protein_impact <- read.table(file_path, sep = "\t",
+                             header = TRUE, stringsAsFactors = FALSE, 
+                             fill = TRUE, quote = "") %>%
+  dplyr::rename("EVENT" = EventID)
+
+
 
 delta_col <- "deltapsi"
 event_col <- "EVENT"
@@ -287,5 +306,30 @@ p <- ggplot(full_rows) +
   coord_fixed(clip = "off", expand = FALSE, xlim = c(-1.8, max(grid$x) + 4.5), ylim = c(0.15, 10.95))
 
 # Save
-ggsave("functional_impact_dotplot_full.pdf", p, device = cairo_pdf, width = 40, height = 6, units = "in", dpi = 600)
+ggsave("Figures/Figure3A_functional_impact_dotplot.pdf", p, device = cairo_pdf, width = 40, height = 6, units = "in", dpi = 600)
 
+
+# ---- 2. Export Differential Events with Protein Impact to Excel ----
+
+# Ensure you have the library installed
+# install.packages("writexl")
+library(writexl)
+
+# 1. Prepare the data for export
+# We use the 'combined' dataframe which already has the protein impacts joined
+export_list <- combined %>%
+  # Remove the helper 'dataset' column and relocate 'Impact' next to 'EVENT'
+  dplyr::select(EVENT, Impact, everything(), -dataset) %>%
+  # Convert factors to characters for cleaner Excel display
+  mutate(across(where(is.factor), as.character)) %>%
+  # Split into a named list based on the drug/dataset names
+  # (Since 'combined$dataset' was a factor, the sheets will be in order: tub, pladb, ssa)
+  split(combined$dataset)
+
+# 2. Define the output path
+output_excel <- "Supplementary5_Differential_Splicing_Protein_Impact_Results.xlsx"
+
+# 3. Write to Excel
+write_xlsx(export_list, path = output_excel)
+
+message("Excel file successfully created at: ", output_excel)

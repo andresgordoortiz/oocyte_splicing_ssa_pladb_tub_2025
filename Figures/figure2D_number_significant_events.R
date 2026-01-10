@@ -7,11 +7,16 @@ library(forcats)
 library(showtext)
 library(scales)
 library(readr)
+library(readxl)
 
-# Import betAS output tables
-tub_fdr_df <- read_csv("tub_fdr.csv")[,-1]
-pladb_fdr_df <- read_csv("pladb_fdr.csv")[,-1]
-ssa_fdr_df <- read_csv("ssa_fdr.csv")[,-1]
+
+# ---- 1. Import from the combined Excel file ----
+excel_file <- "Preprocessing/betAS_out/Supplementary2_betAS_splicing_results.xlsx"
+
+# Read each sheet (using the names we set in the previous step)
+tub_fdr_df   <- read_excel(excel_file, sheet = "Tub_FDR")
+pladb_fdr_df <- read_excel(excel_file, sheet = "PlaDB_FDR")
+ssa_fdr_df   <- read_excel(excel_file, sheet = "SSA_FDR")
 
 # Extract significant (FDR<=0.05 & |deltaPSI| > 10%)
 differential_tub <- na.omit(tub_fdr_df[tub_fdr_df$FDR <= 0.05 & abs(tub_fdr_df$deltapsi) >= 0.1,])
@@ -56,7 +61,6 @@ print(fig_summary)
 # ---------- PLOT SETUP ----------
 
 # Font setup
-font_add(family = "Arial", regular = "/usr/share/fonts/liberation/LiberationSans-Regular.ttf")
 showtext::showtext_opts(dpi = 600)
 showtext_auto()
 
@@ -73,7 +77,7 @@ color_palette <- c(
 )
 
 # Professional publication theme
-theme_publication <- function(base_size = 8, base_family = "Arial") {
+theme_publication <- function(base_size = 8, base_family = "sans") {
   theme_classic(base_size = base_size, base_family = base_family) %+replace%
     theme(
       # Axes
@@ -139,7 +143,7 @@ p <- ggplot(long_df, aes(x = Event, fill = Condition)) +
     y = "Number of significant events"
   ) +
   coord_cartesian(clip = "off") +
-  theme_publication(base_size = 8, base_family = "Arial")
+  theme_publication(base_size = 8, base_family = "sans")
 
 print(p)
 
@@ -148,7 +152,7 @@ print(p)
 # For double-column, use width = 180mm (7 inches)
 
 ggsave(
-  "splicing_events_figure.pdf",
+  "Figures/Figure2D_splicing_events_figure.pdf",
   plot = p,
   width = 85,
   height = 65,
@@ -157,7 +161,7 @@ ggsave(
 )
 
 ggsave(
-  "splicing_events_figure.png",
+  "Figures/Figure2D_splicing_events_figure.png",
   plot = p,
   width = 85,
   height = 65,
@@ -167,7 +171,7 @@ ggsave(
 
 # For double-column version
 ggsave(
-  "splicing_events_figure_wide.pdf",
+  "Figures/Figure2D_splicing_events_figure_wide.pdf",
   plot = p,
   width = 180,
   height = 100,

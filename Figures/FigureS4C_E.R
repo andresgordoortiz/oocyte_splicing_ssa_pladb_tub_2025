@@ -79,8 +79,8 @@
   
   process_drug_data <- function(drug_name) {
     # Load data
-    up_file <- paste0("rmaps_out/", drug_name, "_int_rmaps/pVal.up.vs.bg.RNAmap.txt")
-    down_file <- paste0("rmaps_out/", drug_name, "_int_rmaps/pVal.dn.vs.bg.RNAmap.txt")
+    up_file <- paste0("Supplementary4_rMaps2_out/", drug_name, "_int_rmaps/pVal.up.vs.bg.RNAmap.txt")
+    down_file <- paste0("Supplementary4_rMaps2_out/", drug_name, "_int_rmaps/pVal.dn.vs.bg.RNAmap.txt")
     
     up_data <- read.delim(up_file, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
     down_data <- read.delim(down_file, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
@@ -240,21 +240,22 @@
   
   boxplot_data <- all_drugs %>%
     filter(!is.na(neglog10p)) %>%
-    mutate(source = factor(source, levels = c("Retained", "Excised")))  # FIXED
+    mutate(source = factor(source, levels = c("Retained", "Excised")))  
   
   # Wilcoxon tests
   stat_tests <- boxplot_data %>%
     group_by(region_full, drug_label) %>%
     summarize(
       p_value = tryCatch({
-        wilcox.test(neglog10p[source == "Retained"],  # FIXED
-                    neglog10p[source == "Excised"])$p.value  # FIXED
+        wilcox.test(neglog10p[source == "Retained"],  
+                    neglog10p[source == "Excised"])$p.value  
       }, error = function(e) NA_real_),
       .groups = "drop"
     ) %>%
     mutate(
       significance = case_when(
         is.na(p_value) ~ "ns",
+        p_value < 0.0001 ~ "****",
         p_value < 0.001 ~ "***",
         p_value < 0.01 ~ "**",
         p_value < 0.05 ~ "*",

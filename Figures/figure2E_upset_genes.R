@@ -7,18 +7,22 @@ library(showtext)
 library(readr)
 library(ComplexHeatmap)
 library(circlize)
+library(readxl)
+
+
+# ---- 1. Import from the combined Excel file ----
+excel_file <- "Preprocessing/betAS_out/Supplementary2_betAS_splicing_results.xlsx"
+
+# Read each sheet (using the names we set in the previous step)
+tub_fdr_df   <- read_excel(excel_file, sheet = "Tub_FDR")
+pladb_fdr_df <- read_excel(excel_file, sheet = "PlaDB_FDR")
+ssa_fdr_df   <- read_excel(excel_file, sheet = "SSA_FDR")
 
 # Font setup for Fedora Linux - Liberation Sans is the Arial equivalent
-font_add(family = "LiberationSans", 
-         regular = "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf",
-         bold = "/usr/share/fonts/liberation-sans/LiberationSans-Bold.ttf")
 showtext::showtext_opts(dpi = 600)
 showtext_auto()
 
-# Import betAS output tables
-tub_fdr_df <- read_csv("tub_fdr.csv")[,-1]
-pladb_fdr_df <- read_csv("pladb_fdr.csv")[,-1]
-ssa_fdr_df <- read_csv("ssa_fdr.csv")[,-1]
+
 
 # Extract significant events
 differential_tub <- na.omit(tub_fdr_df[tub_fdr_df$FDR <= 0.05 & abs(tub_fdr_df$deltapsi) >= 0.1,])
@@ -165,11 +169,11 @@ draw(upset_plot)
 
 
 # Double-column version with better proportions
-pdf("upset_genes_figure.pdf", width = 180/25.4, height = 130/25.4)
+pdf("Figures/Figure2E_upset_genes_figure.pdf", width = 180/25.4, height = 130/25.4)
 draw(upset_plot)
 dev.off()
 
-png("upset_genes_figure.png", width = 180, height = 130, units = "mm", res = 600)
+png("Figures/Figure2E_upset_genes_figure.png", width = 180, height = 130, units = "mm", res = 600)
 draw(upset_plot)
 dev.off()
 

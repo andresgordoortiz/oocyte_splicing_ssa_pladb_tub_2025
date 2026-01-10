@@ -69,8 +69,8 @@ theme_publication <- function(base_size = 10) {
 
 process_drug_data_exon <- function(drug_name) {
   # Construct file paths
-  up_file <- paste0("rmaps_out/", drug_name, "_ex_rmaps/pVal.up.vs.bg.RNAmap.txt")
-  down_file <- paste0("rmaps_out/", drug_name, "_ex_rmaps/pVal.dn.vs.bg.RNAmap.txt")
+  up_file <- paste0("Supplementary4_rMaps2_out/", drug_name, "_ex_rmaps/pVal.up.vs.bg.RNAmap.txt")
+  down_file <- paste0("Supplementary4_rMaps2_out/", drug_name, "_ex_rmaps/pVal.dn.vs.bg.RNAmap.txt")
   
   # Check if files exist
   if (!file.exists(up_file)) {
@@ -254,7 +254,7 @@ p_tracks <- ggplot() +
   )
 
 # ============================================================================
-# PANEL B: BOXPLOT COMPARISON WITH SIGNIFICANCE TESTS
+# PANEL B: BOXPLOT COMPARISON WITH SIGNIFICANCE TESTS (FIXED)
 # ============================================================================
 
 cat("Creating Panel B: Statistical Boxplots...\n")
@@ -276,6 +276,7 @@ stat_tests <- boxplot_data %>%
   mutate(
     significance = case_when(
       is.na(p_value) ~ "ns",
+      p_value < 0.0001 ~ "****",
       p_value < 0.001 ~ "***",
       p_value < 0.01 ~ "**",
       p_value < 0.05 ~ "*",
@@ -305,22 +306,28 @@ p_boxplots <- ggplot(boxplot_data, aes(x = drug_label, y = neglog10p, fill = sou
     inherit.aes = FALSE,
     size = 4, fontface = "bold", color = "black"
   ) +
-  facet_wrap(~ region_full, ncol = 4, scales = "fixed") +
+  facet_wrap(~ region_full, ncol = 8, scales = "fixed") +
   labs(
     x = NULL,
     y = expression(bold(-log[10](italic(p)*"-value")))
   ) +
   scale_fill_manual(values = splicing_colors, name = "Splicing Event") +
   scale_color_manual(values = splicing_colors, name = "Splicing Event") +
-  theme_publication(base_size = 10) +
+  theme_publication(base_size = 15) +
   theme(
     legend.position = "top",
     legend.margin = margin(0, 0, 3, 0),
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, margin = margin(t = 5)),
     panel.spacing = unit(0.6, "lines"),
     strip.background = element_blank(),
-    strip.text = element_text(face = "bold", size = rel(1.0), margin = margin(b = 6))
+    strip.text = element_text(face = "bold", size = rel(0.9), margin = margin(b = 6))  # Changed to rel(0.8) to match introns
   )
+
+# Save individual panel
+# Create at 3x the final size: 207mm × 50mm → 621mm × 150mm = 24.45" × 5.91"
+cairo_pdf("panel_B_boxplots_exon.pdf", width = 24.45, height = 5.91, family = "sans")
+print(p_boxplots)
+dev.off()
 
 # ============================================================================
 # PANEL C: COMPARATIVE HEATMAP (FIXED - proper column ordering)
@@ -531,25 +538,8 @@ suppressWarnings({
       width = 18, height = 16, units = "in", res = 300, type = "cairo")
   final_plot_grob()
   dev.off()
+
   
-  tiff("rbp_comprehensive_analysis_exon.tiff",
-       width = 18, height = 16, units = "in", res = 300, 
-       compression = "lzw", type = "cairo")
-  final_plot_grob()
-  dev.off()
-  
-  # Individual panels
-  cairo_pdf("panel_A_tracks_exon.pdf", width = 18, height = 5, family = "sans")
-  print(p_tracks)
-  dev.off()
-  
-  cairo_pdf("panel_B_boxplots_exon.pdf", width = 18, height = 8, family = "sans")
-  print(p_boxplots)
-  dev.off()
-  
-  cairo_pdf("panel_C_heatmap_exon.pdf", width = 12, height = 10, family = "sans")
-  draw(ht, merge_legend = TRUE)
-  dev.off()
 })
 
 cat("\n✓ Main figures saved\n")

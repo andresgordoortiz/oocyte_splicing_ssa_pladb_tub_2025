@@ -7,10 +7,6 @@ library(readr)
 library(showtext)
 library(gridExtra)
 
-# ==============================================================================
-# BIOINFORMATICS QUALITY STANDARDS - DESIGN PRINCIPLES
-# ==============================================================================
-# 
 # 1. STATISTICAL INTEGRITY:
 #    - All statistical tests use FULL, unclipped data
 #    - Wilcoxon rank-sum test (non-parametric) for robustness
@@ -83,12 +79,12 @@ my_theme <- theme_cellpub(base_size = 16, base_family_in = base_family)
 
 # ---- Read data ----
 message("Reading data files...")
-tub_ex <- read_tsv("matt_out/tub_ex/tub_exons_with_efeatures.tab", show_col_types = FALSE)
-tub_int <- read_tsv("matt_out/tub_int/tub_introns_with_ifeatures.tab", show_col_types = FALSE)
-pladb_ex <- read_tsv("matt_out/pladb_ex/pladb_exons_with_efeatures.tab", show_col_types = FALSE)
-pladb_int <- read_tsv("matt_out/pladb_int/pladb_introns_with_ifeatures.tab", show_col_types = FALSE)
-ssa_ex <- read_tsv("matt_out/ssa_ex/ssa_exons_with_efeatures.tab", show_col_types = FALSE)
-ssa_int <- read_tsv("matt_out/ssa_int/ssa_introns_with_ifeatures.tab", show_col_types = FALSE)
+tub_ex <- read_tsv("Supplementary3_matt_out/tub_ex/tub_exons_with_efeatures.tab", show_col_types = FALSE)
+tub_int <- read_tsv("Supplementary3_matt_out/tub_int/tub_introns_with_ifeatures.tab", show_col_types = FALSE)
+pladb_ex <- read_tsv("Supplementary3_matt_out/pladb_ex/pladb_exons_with_efeatures.tab", show_col_types = FALSE)
+pladb_int <- read_tsv("Supplementary3_matt_out/pladb_int/pladb_introns_with_ifeatures.tab", show_col_types = FALSE)
+ssa_ex <- read_tsv("Supplementary3_matt_out/ssa_ex/ssa_exons_with_efeatures.tab", show_col_types = FALSE)
+ssa_int <- read_tsv("Supplementary3_matt_out/ssa_int/ssa_introns_with_ifeatures.tab", show_col_types = FALSE)
 
 # ---- Function to perform statistical tests for all features ----
 test_all_features <- function(df, treatment_name, event_type) {
@@ -149,6 +145,7 @@ test_all_features <- function(df, treatment_name, event_type) {
         event_type = event_type,
         p.signif = case_when(
           is.na(p.value) ~ "ns",
+          p.value <= 0.0001 ~ "****",
           p.value <= 0.001 ~ "***",
           p.value <= 0.01 ~ "**",
           p.value <= 0.05 ~ "*",

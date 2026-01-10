@@ -6,7 +6,8 @@ library(ggforce)
 library(patchwork)
 library(grid)
 
-splicing_data <- getDataset(pathTables = "new_data_INCLUSION_LEVELS_FULL-mm10.tab", tool = "vast-tools")
+splicing_data <- getDataset(pathTables = "Preprocessing/ssa_pladb_tub_oocyte_INCLUSION_LEVELS_FULL-mm10.tab"
+                            , tool = "vast-tools")
 
 pladb_data<-splicing_data[,1:18]
 ssa_tub_data<-splicing_data[, c(1:6, 19:36)]
@@ -29,9 +30,12 @@ introns_ssa_tub <- filterEvents(ssa_tub_events, types = c("IR"), N = 10)
 alt_ssa_tub <- filterEvents(ssa_tub_events, types = c("Alt5", "Alt3"), N = 10)
 
 # Import betAS output tables
-tub_fdr_df <- read_csv("tub_fdr.csv")[,-1]
-pladb_fdr_df <- read_csv("pladb_fdr.csv")[,-1]
-ssa_fdr_df <- read_csv("ssa_fdr.csv")[,-1]
+excel_file <- "Preprocessing/betAS_out/Supplementary2_betAS_splicing_results.xlsx"
+
+# Read each sheet (using the names we set in the previous step)
+tub_fdr_df   <- read_excel(excel_file, sheet = "Tub_FDR")
+pladb_fdr_df <- read_excel(excel_file, sheet = "PlaDB_FDR")
+ssa_fdr_df   <- read_excel(excel_file, sheet = "SSA_FDR")
 
 # Extract significant events
 differential_tub <- na.omit(tub_fdr_df[tub_fdr_df$FDR <= 0.05 & abs(tub_fdr_df$deltapsi) >= 0.1,])
@@ -161,7 +165,6 @@ make_tile_plot <- function(mini_heatmap_data, treat_label, palette_colors, legen
   p
 }
 
-font_add(family = "Arial", regular = "/usr/share/fonts/liberation/LiberationSans-Regular.ttf")
 showtext::showtext_opts(dpi = 600)
 showtext_auto()
 
@@ -225,4 +228,4 @@ final_fig <- (left_column | right_column) +
 print(final_fig)
 
 # ---- Optional: save to file ----
-ggsave("splicing_exon_intron_TUB_PLADB_SSA_vertical_PSI.pdf", final_fig, width = 8, height = 10)
+ggsave("Figures/Figure2F_splicing_exon_intron_TUB_PLADB_SSA_vertical_PSI.pdf", final_fig, width = 8, height = 10)

@@ -3,11 +3,15 @@ library(ggrepel)
 library(dplyr)
 library(readr)
 library(showtext)
+library(readxl)
 
-# Import betAS output tables
-tub_fdr_df <- read_csv("tub_fdr.csv")[,-1]
-pladb_fdr_df <- read_csv("pladb_fdr.csv")[,-1]
-ssa_fdr_df <- read_csv("ssa_fdr.csv")[,-1]
+# ---- 1. Import from the combined Excel file ----
+excel_file <- "Preprocessing/betAS_out/Supplementary2_betAS_splicing_results.xlsx"
+
+# Read each sheet (using the names we set in the previous step)
+tub_fdr_df   <- read_excel(excel_file, sheet = "Tub_FDR")
+pladb_fdr_df <- read_excel(excel_file, sheet = "PlaDB_FDR")
+ssa_fdr_df   <- read_excel(excel_file, sheet = "SSA_FDR")
 
 # Base colors
 ssa_color   <- "#706993"
@@ -138,9 +142,9 @@ legend_labels <- c("Not significant",
                    }))
 
 # Font setup
-font_add(family = "Arial", regular = "/usr/share/fonts/liberation/LiberationSans-Regular.ttf")
 showtext::showtext_opts(dpi = 600)
 showtext_auto()
+showtext.opts(dpi=600)
 
 # ---- Build the volcano plot ----
 volcano_plot_all <- ggplot(plot_df, aes(x = deltapsi, y = negLog10FDR_transformed)) +
@@ -159,7 +163,7 @@ volcano_plot_all <- ggplot(plot_df, aes(x = deltapsi, y = negLog10FDR_transforme
     breaks = c(0, 1, 2, 3, compressed_max),
     labels = c("0", "1", "2", "3", paste0("≥", round(y_raw_max, 1)))
   ) +
-  theme_classic(base_size = 14, base_family = "Liberation Sans") +
+  theme_classic(base_size = 14, base_family = "sans") +
   theme(
     axis.line = element_line(linewidth = 0.9, colour = "#222222"),
     axis.ticks = element_line(linewidth = 0.9, colour = "#222222"),
@@ -177,4 +181,4 @@ volcano_plot_all <- ggplot(plot_df, aes(x = deltapsi, y = negLog10FDR_transforme
     y = "-log10(adjusted p-value)")
 
 
-ggsave("volcano_combined_deltapsi.png", volcano_plot_all, device = png, width = 3, height = 3, units = "in", dpi = 600)
+ggsave("Figures/Figure2c_volcano_combined_deltapsi.png", volcano_plot_all, device = png, width = 3, height = 3, units = "in", dpi = 600)
